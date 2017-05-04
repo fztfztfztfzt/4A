@@ -1,7 +1,8 @@
-BCM = "haha"
+BCM = "123"
 IN = 0
+print "GPIO Simulate"
 def setmode(a):
-	print a
+	pass
 	
 def setup(a,b):
 	pass

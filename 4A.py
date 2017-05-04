@@ -58,11 +58,11 @@ data = mp.Array('B',[0x00 for i in range(34)])
 #data[33] 车轮个位
 
 def get_light():
-	print "light start"
+	#print "light start"
 	pPWM = mp.Process(target=light_PWM)
 	pPWM.start()
 	while True:
-		temp = int(os.popen('echo 1').read())
+		temp = int(os.popen('printf "1"').read())
 		data[23] = int(temp)
 		if config.value&0x0080==0:
 			pPWM.terminate()
@@ -72,19 +72,19 @@ def get_light():
 		time.sleep(1)
 
 def light_PWM():
-	print "PWM start"
+	#print "PWM start"
 	temp = 0
 	if config.value&0x0080==0:
 		temp = data[23]
 	else:
 		temp = (config.value&0x0060)>>5
-	os.popen('echo PWM')
+	os.popen('printf "PWM"')
 
 def ultra():
-	print "ultra start"
+	#print "ultra start"
 	while True:
 		if config.value&0x0200==0:
-			temp = os.popen('echo 11.1 22.2 33.3 4.4 5.5 6.6 +77').read().strip("\n").split(" ")
+			temp = os.popen('printf "11.1 22.2 33.3 4.4 5.5 6.6 +77"').read().strip("\n").split(" ")
 			data[8] = int(temp[0][0])
 			data[9] = int(temp[0][1])
 			data[10] = int(temp[0][3])
@@ -107,9 +107,7 @@ def ultra():
 		time.sleep(0.1)
 
 def hall():
-	print "hall start"
-	GPIO.setup(7,GPIO.IN)
-	#GPIO.setup(8,GPIO.IN)
+	#print "hall start"
 	halltime1 = [0,0,0]
 	timen1 = 0
 	state1 = 0
@@ -167,7 +165,7 @@ def RF():
 		send = send + 'f0 '
 		send = send + ' '.join("%02x"%i for i in data)
 		#print send
-		os.popen(send)
+		#os.popen(send)
 		
 		time.sleep(0.1)
 class state_flag():
@@ -204,17 +202,6 @@ class state_flag():
 	d_count = 0
 	
 def state_machine():
-	
-	#state machine GPIO init
-	def state_machine_GPIO_init():
-		print "state machine init"
-		GPIO.setup(state_flag.UP_B,GPIO.IN)
-		GPIO.setup(state_flag.DOWN_B,GPIO.IN)
-		GPIO.setup(state_flag.LEFT_B,GPIO.IN)
-		GPIO.setup(state_flag.RIGHT_B,GPIO.IN)
-		GPIO.setup(state_flag.MIDDLE_B,GPIO.IN)
-		GPIO.setup(state_flag.SHUT_B,GPIO.IN)
-		state.value = 0x1000
 		
 	def state_set_flag():
 		#systick_freq
@@ -673,15 +660,32 @@ def state_machine():
 				state_flag.m_in_flag = 0
 				state.value = 0x3510
 
-	state_machine_GPIO_init()
+	print "state machine start"
+	state.value = 0x1000
 	while True:
 		#print "%04x"%state.value
 		state_trans()
 		time.sleep(0.1)
-
+		
+def GPIO_init():
+	GPIO.setmode(GPIO.BCM)
+	
+	#霍尔传感器GPIO
+	GPIO.setup(7,GPIO.IN)
+	#GPIO.setup(8,GPIO.IN)
+		
+	#状态机GPIO
+	GPIO.setup(state_flag.UP_B,GPIO.IN)
+	GPIO.setup(state_flag.DOWN_B,GPIO.IN)
+	GPIO.setup(state_flag.LEFT_B,GPIO.IN)
+	GPIO.setup(state_flag.RIGHT_B,GPIO.IN)
+	GPIO.setup(state_flag.MIDDLE_B,GPIO.IN)
+	GPIO.setup(state_flag.SHUT_B,GPIO.IN)
+		
+	
 def main():
 	print "start"
-	GPIO.setmode(GPIO.BCM)
+	GPIO_init()
 	phall = mp.Process(target=hall)
 	pultra = mp.Process(target=ultra)
 	plight = mp.Process(target=get_light)
