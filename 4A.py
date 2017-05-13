@@ -265,21 +265,17 @@ def state_machine():
 		#shut
 		state_flag.s_pre_flag = state_flag.s_cur_flag
 		state_flag.s_cur_flag = GPIO.input(state_flag.SHUT_B)
-		
-		if state_flag.s_pre_flag == 0 and state_flag.s_cur_flag == 1:
-			state_flag.s_in_flag = 1
-			print "shut input"	
 		if state_flag.s_cur_flag == 1:
-			if state_flag.d_pre_flag == 1:
+			if state_flag.s_pre_flag == 1:
 				state_flag.s_count = state_flag.s_count + 1
 				if state_flag.s_count >= 20:
 					state_flag.s_count = 0
 					print "shutdown"
 					os.popen("sudo halt")
 			else:
-				state_flag.d_in_flag = 1
+				state_flag.s_in_flag = 1
 				state_flag.s_count = 0
-				print "down input"
+				print "shut input"
 			
 	def state_trans():
 		state_set_flag()
