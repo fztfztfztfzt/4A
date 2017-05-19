@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import multiprocessing as mp
+import bluetooth
 import os
 import time
 try:
@@ -62,19 +63,28 @@ def get_light():
 	while True:
 		temp = 0
 		GPIO.output(12,GPIO.HIGH)
+		time.sleep(0.00001)
 		GPIO.output(4,GPIO.HIGH)
+		time.sleep(0.00001)
 		GPIO.output(4,GPIO.LOW)
-
+		time.sleep(0.00001)
 		GPIO.output(4,GPIO.HIGH)
+		time.sleep(0.00001)
 		GPIO.output(4,GPIO.LOW)
+		time.sleep(0.00001)
 		GPIO.output(12,GPIO.LOW)
+		time.sleep(0.00001)
 		GPIO.output(4,GPIO.HIGH)
+		time.sleep(0.00001)
 		GPIO.output(4,GPIO.LOW)
-
-		for i in range(0,8):
+		time.sleep(0.00001)
+		
+		for i in range(8):
 			GPIO.output(4,GPIO.HIGH)
+			time.sleep(0.00001)
 			temp = (temp<<1) + GPIO.input(25)
 			GPIO.output(4,GPIO.LOW)
+			time.sleep(0.00001)
 
 		data[23] = temp
 		print temp
@@ -137,13 +147,14 @@ def hall():
 				if timen1==3:
 					timen1=0
 					temp = (data[30]*1000+data[31]*100+data[32]*10+data[33])/((halltime1[2]-halltime1[0])/2.0)
-					print "m/s:",temp
+					#print "m/s:",temp
 					temp = int(temp*10)
 					data[2] = temp%10
 					temp = temp/10
 					data[1] = temp%10
 					temp = temp/10
 					data[0] = temp
+		"""
 		temp2 = GPIO.input(20)
 		if state2==0:
 			if temp2==1:
@@ -159,23 +170,38 @@ def hall():
 					print "kph:",temp
 					data[3] = (temp/10)%100
 					data[4] = temp%10
+		"""
 		time.sleep(0.01)
 
 def RF():
-	while True:
-		#print "RF"
-		send = './rf24 ff '
-		send = send + "%02x "%((state.value&0xff00)>>8)
-		send = send + "%02x "%((state.value&0x00ff))
-		send = send + 'f8 '
-		send = send + "%02x "%((config.value&0xff00)>>8)
-		send = send + "%02x "%((config.value&0x00ff))
-		send = send + 'f0 '
-		send = send + ' '.join("%02x"%i for i in data)
-		#print send
-		#os.popen(send)
+	port = 1
+	addr = '00:21:13:00:B5:F2'
+	sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+	
+	flag = 1
+	while flag:
+		try:
+			sock.connect((addr,port))
+			flag = 0
+		except:
+			print "connect error"
+			time.sleep(1)
 		
-		time.sleep(0.1)
+	while True:
+		send = ''
+		send = send + chr(0xff)
+		send = send + chr((state.value&0xff00)>>8)
+		send = send + chr((state.value&0x00ff))
+		send = send + chr(0xf8)
+		send = send + chr((config.value&0xff00)>>8)
+		send = send + chr((config.value&0x00ff))
+		send = send + chr(0xf0)
+		send = send + ''.join([chr(d) for d in data])
+		print send
+		sock.send(send)
+		time.sleep(0.5)
+	sock.close()
+		
 class state_flag():
 	#BCM no. of state machine GPIO
 	UP_B = 5
@@ -283,7 +309,7 @@ def state_machine():
 				if state_flag.s_count >= 20:
 					state_flag.s_count = 0
 					print "shutdown"
-					os.popen("sudo halt")
+					#os.popen("sudo halt")
 			else:
 				state_flag.s_in_flag = 1
 				state_flag.s_count = 0
@@ -691,8 +717,8 @@ def GPIO_init():
 	GPIO.setmode(GPIO.BCM)
 	
 	#霍尔传感器GPIO
-	GPIO.setup(7,GPIO.IN)
-	#GPIO.setup(8,GPIO.IN)
+	GPIO.setup(16,GPIO.IN)
+	#GPIO.setup(20,GPIO.IN)
 		
 	#状态机GPIO
 	GPIO.setup(state_flag.UP_B,GPIO.IN)
@@ -703,9 +729,12 @@ def GPIO_init():
 	GPIO.setup(state_flag.SHUT_B,GPIO.IN)
 	
 	#光线传感器GPIO
-	GPIO.setup(4,GPIO.OUT)                   #clk
-	GPIO.setup(12,GPIO.OUT)                   #DI
-	GPIO.setup(25,GPIO.IN)                    #DO
+	GPIO.setup(4,GPIO.OUT)
+	#clk
+	GPIO.setup(12,GPIO.OUT)
+	#DI
+	GPIO.setup(25,GPIO.IN)
+	#DO
 	#PWM
 	GPIO.setup(18,GPIO.OUT)
 	global_var.pwm = GPIO.PWM(18,1000)
@@ -720,7 +749,7 @@ def main():
 	plight = mp.Process(target=get_light)
 	pRF = mp.Process(target=RF)
 	pstate = mp.Process(target=state_machine)
-	data[30] = 2
+	data[30] = 1
 	data[31] = 3
 	data[32] = 3
 	data[33] = 3
