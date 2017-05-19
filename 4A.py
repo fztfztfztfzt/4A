@@ -59,26 +59,36 @@ data = mp.Array('B',[0x00 for i in range(34)])
 
 def get_light():
 	#print "light start"
-	pPWM = mp.Process(target=light_PWM)
-	pPWM.start()
 	while True:
-		temp = int(os.popen('printf "1"').read())
-		data[23] = int(temp)
-		if config.value&0x0080==0:
-			pPWM.terminate()
-			if temp>THRESHOLD:
-				pPWM = mp.Process(target=light_PWM)
-				pPWM.start()
-		time.sleep(1)
+		temp = 0
+		GPIO.output(12,GPIO.HIGH)
+		GPIO.output(4,GPIO.HIGH)
+		GPIO.output(4,GPIO.LOW)
 
-def light_PWM():
-	#print "PWM start"
-	temp = 0
-	if config.value&0x0080==0:
-		temp = data[23]
-	else:
-		temp = (config.value&0x0060)>>5
-	os.popen('printf "PWM"')
+		GPIO.output(4,GPIO.HIGH)
+		GPIO.output(4,GPIO.LOW)
+		GPIO.output(12,GPIO.LOW)
+		GPIO.output(4,GPIO.HIGH)
+		GPIO.output(4,GPIO.LOW)
+
+		for i in range(0,8):
+			GPIO.output(4,GPIO.HIGH)
+			temp = (temp<<1) + GPIO.input(25)
+			GPIO.output(4,GPIO.LOW)
+
+		data[23] = temp
+		print temp
+		if config.value&0x0080==0:
+
+			if temp>THRESHOLD:
+				#print "PWM start"
+				if config.value&0x0080==0:
+					temp = data[23]
+				else:
+					temp = (config.value&0x0060)>>5
+				global_var.pwm.ChangeDutyCycle(50) #0-100
+
+		time.sleep(1)
 
 def ultra():
 	#print "ultra start"
@@ -115,7 +125,7 @@ def hall():
 	timen2 = 0
 	state2 = 0
 	while True:
-		temp1 = GPIO.input(7)
+		temp1 = GPIO.input(16)
 		if state1==0:
 			if temp1==1:
 				state1 = 1
@@ -134,8 +144,7 @@ def hall():
 					data[1] = temp%10
 					temp = temp/10
 					data[0] = temp
-		"""
-		temp2 = GPIO.input(8)
+		temp2 = GPIO.input(20)
 		if state2==0:
 			if temp2==1:
 				state2 = 1
@@ -150,12 +159,11 @@ def hall():
 					print "kph:",temp
 					data[3] = (temp/10)%100
 					data[4] = temp%10
-		"""
-		time.sleep(0.1)
+		time.sleep(0.01)
 
 def RF():
 	while True:
-		print "RF"
+		#print "RF"
 		send = './rf24 ff '
 		send = send + "%02x "%((state.value&0xff00)>>8)
 		send = send + "%02x "%((state.value&0x00ff))
@@ -202,6 +210,10 @@ class state_flag():
 	d_count = 0
 	s_count = 0
 	
+	
+class global_var():
+	pwm = ''
+
 def state_machine():
 		
 	def state_set_flag():
@@ -689,8 +701,17 @@ def GPIO_init():
 	GPIO.setup(state_flag.RIGHT_B,GPIO.IN)
 	GPIO.setup(state_flag.MIDDLE_B,GPIO.IN)
 	GPIO.setup(state_flag.SHUT_B,GPIO.IN)
-		
 	
+	#光线传感器GPIO
+	GPIO.setup(4,GPIO.OUT)                   #clk
+	GPIO.setup(12,GPIO.OUT)                   #DI
+	GPIO.setup(25,GPIO.IN)                    #DO
+	#PWM
+	GPIO.setup(18,GPIO.OUT)
+	global_var.pwm = GPIO.PWM(18,1000)
+	global_var.pwm.start(0)
+	
+
 def main():
 	print "start"
 	GPIO_init()
