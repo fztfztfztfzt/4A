@@ -87,7 +87,7 @@ def get_light():
 			time.sleep(0.00001)
 
 		data[23] = temp
-		print temp
+		#print temp
 		if config.value&0x0080==0:
 
 			if temp>THRESHOLD:
