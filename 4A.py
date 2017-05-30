@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import multiprocessing as mp
+import bluetooth
 import os
 import time
 try:
@@ -57,28 +58,72 @@ data = mp.Array('B',[0x00 for i in range(34)])
 #data[32] 车轮十位
 #data[33] 车轮个位
 
-def get_light():
-	#print "light start"
-	pPWM = mp.Process(target=light_PWM)
-	pPWM.start()
-	while True:
-		temp = int(os.popen('printf "1"').read())
-		data[23] = int(temp)
-		if config.value&0x0080==0:
-			pPWM.terminate()
-			if temp>THRESHOLD:
-				pPWM = mp.Process(target=light_PWM)
-				pPWM.start()
-		time.sleep(1)
+def set_light():
+	type = (config.value&0x000c)>>2
+	temp = int((data[23]/15.0)*100) 
+	while True:                   #1常亮，2闪烁，3SOS
+		if(type == 2)
+			global_var.pwm.ChangeDutyCycle(0)
+			sleep(0.5)
+			global_var.pwm.ChangeDutyCycle(temp)
+			sleep(0.5)
+		if(type == 3)
+			for i in range (3)
+				global_var.pwm.ChangeDutyCycle(0)
+				sleep(0.5)
+				global_var.pwm.ChangeDutyCycle(temp)
+				sleep(0.5)
+			for i in range (3)
+				global_var.pwm.ChangeDutyCycle(0)
+				sleep(0.5)
+				global_var.pwm.ChangeDutyCycle(temp)
+				sleep(1)
+			for i in range (3)
+				global_var.pwm.ChangeDutyCycle(0)
+				sleep(0.5)
+				global_var.pwm.ChangeDutyCycle(temp)
+				sleep(0.5)
 
-def light_PWM():
-	#print "PWM start"
-	temp = 0
-	if config.value&0x0080==0:
-		temp = data[23]
-	else:
-		temp = (config.value&0x0060)>>5
-	os.popen('printf "PWM"')
+
+def get_light():
+	GPIO.output(12,GPIO.HIGH)
+	GPIO.output(25,GPIO.HIGH)
+	while True:
+		if config.value&0x0010 == 0:
+			temp = 0
+			
+			GPIO.output(25,GPIO.LOW)
+			time.sleep(0.2)
+			GPIO.output(25,GPIO.HIGH)
+
+			time.sleep(0.2)
+			GPIO.output(12,GPIO.LOW)
+			time.sleep(0.2)
+			
+			temp=(temp<<1)+GPIO.input(4)
+			temp=(temp<<1)+GPIO.input(17)
+			temp=(temp<<1)+GPIO.input(27)
+			temp=(temp<<1)+GPIO.input(22)
+
+			data[23] = temp
+			GPIO.output(12,GPIO.HIGH)
+			time.sleep(0.4)
+		else:
+			temp = config.value&0x0003
+			if temp == 0:
+				#关闭手电筒
+				data[23] = 0     
+			elif temp == 1:
+				#亮度低
+				data[23] = 5
+			elif temp == 2:
+				#亮度中
+				data[23] = 10
+			elif temp == 3:
+				#亮度高
+				data[23] = 15
+			time.sleep(1)
+			
 
 def ultra():
 	#print "ultra start"
@@ -115,7 +160,7 @@ def hall():
 	timen2 = 0
 	state2 = 0
 	while True:
-		temp1 = GPIO.input(7)
+		temp1 = GPIO.input(16)
 		if state1==0:
 			if temp1==1:
 				state1 = 1
@@ -126,7 +171,7 @@ def hall():
 				timen1 = timen1+1
 				if timen1==3:
 					timen1=0
-					temp = (data[30]*1000+data[31]*100+data[32]*10+data[33])/((halltime1[2]-halltime1[0])/2.0)
+					temp = (data[30]+data[31]/10.0+data[32]/100.0+data[33]/1000.0)/((halltime1[2]-halltime1[0])/2.0)
 					print "m/s:",temp
 					temp = int(temp*10)
 					data[2] = temp%10
@@ -134,8 +179,7 @@ def hall():
 					data[1] = temp%10
 					temp = temp/10
 					data[0] = temp
-		"""
-		temp2 = GPIO.input(8)
+		temp2 = GPIO.input(20)
 		if state2==0:
 			if temp2==1:
 				state2 = 1
@@ -146,28 +190,41 @@ def hall():
 				timen2 = timen2+1
 				if timen2==3:
 					timen2=0
-					temp = 60/((halltime2[2]-halltime2[0])/2.0)
+					temp = int(60/((halltime2[2]-halltime2[0])/2.0))
 					print "kph:",temp
 					data[3] = (temp/10)%100
 					data[4] = temp%10
-		"""
-		time.sleep(0.1)
+		time.sleep(0.01)
 
 def RF():
-	while True:
-		print "RF"
-		send = './rf24 ff '
-		send = send + "%02x "%((state.value&0xff00)>>8)
-		send = send + "%02x "%((state.value&0x00ff))
-		send = send + 'f8 '
-		send = send + "%02x "%((config.value&0xff00)>>8)
-		send = send + "%02x "%((config.value&0x00ff))
-		send = send + 'f0 '
-		send = send + ' '.join("%02x"%i for i in data)
-		#print send
-		#os.popen(send)
+	port = 1
+	addr = '00:21:13:00:B5:F2'
+	sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+	
+	flag = 1
+	while flag:
+		try:
+			sock.connect((addr,port))
+			flag = 0
+		except:
+			print "connect error"
+			time.sleep(1)
 		
-		time.sleep(0.1)
+	while True:
+		send = ''
+		send = send + chr(0xff)
+		send = send + chr((state.value&0xff00)>>8)
+		send = send + chr((state.value&0x00ff))
+		send = send + chr(0xf8)
+		send = send + chr((config.value&0xff00)>>8)
+		send = send + chr((config.value&0x00ff))
+		send = send + chr(0xf0)
+		send = send + ''.join([chr(d) for d in data])
+		print send
+		sock.send(send)
+		time.sleep(0.5)
+	sock.close()
+		
 class state_flag():
 	#BCM no. of state machine GPIO
 	UP_B = 5
@@ -200,7 +257,12 @@ class state_flag():
 	#botton holding counts
 	u_count = 0
 	d_count = 0
+	s_count = 0
 	
+	
+class global_var():
+	pwm = ''
+
 def state_machine():
 		
 	def state_set_flag():
@@ -264,10 +326,17 @@ def state_machine():
 		#shut
 		state_flag.s_pre_flag = state_flag.s_cur_flag
 		state_flag.s_cur_flag = GPIO.input(state_flag.SHUT_B)
-		#rising edge
-		if state_flag.s_pre_flag == 0 and state_flag.s_cur_flag == 1:
-			state_flag.s_in_flag = 1
-			print "shut input"	
+		if state_flag.s_cur_flag == 1:
+			if state_flag.s_pre_flag == 1:
+				state_flag.s_count = state_flag.s_count + 1
+				if state_flag.s_count >= 20:
+					state_flag.s_count = 0
+					print "shutdown"
+					#os.popen("sudo halt")
+			else:
+				state_flag.s_in_flag = 1
+				state_flag.s_count = 0
+				print "shut input"
 			
 	def state_trans():
 		state_set_flag()
@@ -671,8 +740,8 @@ def GPIO_init():
 	GPIO.setmode(GPIO.BCM)
 	
 	#霍尔传感器GPIO
-	GPIO.setup(7,GPIO.IN)
-	#GPIO.setup(8,GPIO.IN)
+	GPIO.setup(16,GPIO.IN)
+	GPIO.setup(20,GPIO.IN)
 		
 	#状态机GPIO
 	GPIO.setup(state_flag.UP_B,GPIO.IN)
@@ -681,24 +750,39 @@ def GPIO_init():
 	GPIO.setup(state_flag.RIGHT_B,GPIO.IN)
 	GPIO.setup(state_flag.MIDDLE_B,GPIO.IN)
 	GPIO.setup(state_flag.SHUT_B,GPIO.IN)
-		
 	
+	#光线传感器GPIO
+	GPIO.setup(4,GPIO.IN)       #DB7           
+	GPIO.setup(17,GPIO.IN)      #DB6
+	GPIO.setup(27,GPIO.IN)		#DB5
+	GPIO.setup(22,GPIO.IN)		#DB4
+	GPIO.setup(25,GPIO.OUT)     #WR
+	GPIO.setup(12,GPIO.OUT)     #RD
+	
+	#PWM
+	GPIO.setup(18,GPIO.OUT)
+	global_var.pwm = GPIO.PWM(18,1000)
+	global_var.pwm.start(0)
+	
+
 def main():
 	print "start"
 	GPIO_init()
 	phall = mp.Process(target=hall)
-	pultra = mp.Process(target=ultra)
+	#pultra = mp.Process(target=ultra)
 	plight = mp.Process(target=get_light)
-	pRF = mp.Process(target=RF)
+	#pRF = mp.Process(target=RF)
 	pstate = mp.Process(target=state_machine)
-	data[30] = 2
-	data[31] = 3
-	data[32] = 3
-	data[33] = 3
+	psetlight = mp.Process(target=set_light)
+	data[30] = 1
+	data[31] = 5
+	data[32] = 0
+	data[33] = 0
 	phall.start()
-	pultra.start()
+	psetlight.start()
+	#pultra.start()
 	plight.start()
-	pRF.start()
+	#pRF.start()
 	pstate.start()
 
 if __name__=="__main__":
