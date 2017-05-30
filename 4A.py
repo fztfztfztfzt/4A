@@ -220,7 +220,7 @@ def RF():
 		send = send + chr((config.value&0x00ff))
 		send = send + chr(0xf0)
 		send = send + ''.join([chr(d) for d in data])
-		print send
+		#print send
 		sock.send(send)
 		time.sleep(0.5)
 	sock.close()
